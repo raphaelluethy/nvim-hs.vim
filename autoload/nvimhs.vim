@@ -51,6 +51,40 @@ function! nvimhs#start(workingDirectory, name, args)
 	return remote#host#Require(a:name)
 endfunction
 
+function! nvimhs#start(workingDirectory, name, args)
+	try
+		let l:chan = remote#host#Require(a:name)
+		if l:chan
+			try
+				" Hack to test if the channel is still working
+				call rpcrequest(l:chan, 'Ping', [])
+				return l:chan
+			catch '.*No provider for:.*'
+				" Message returned by nvim-hs if the function does not exist
+				return l:chan
+			catch
+				" Channel is not working, call the usual starting mechanism
+			endtry
+		endif
+	catch
+		" continue
+	endtry
+	let l:starter = get(g:, 'nvimhsPluginStarter', {})
+	if len(l:starter) == 0
+		let l:starter = nvimhs#stack#pluginstarter()
+	endif
+
+	let l:Factory = function('s:buildStartAndRegister'
+				\ , [ { 'pluginStarter': l:starter
+				\     , 'cwd': a:workingDirectory
+				\     , 'name': a:name
+				\     , 'args': a:args
+				\     }
+				\   ])
+	call remote#host#Register(a:name, '*', l:Factory)
+	return remote#host#Require(a:name)
+endfunction
+
 " This will forcibly close the RPC channel and call nvimhs#start. This will
 " cause the state of the plugin to be lost. There is no standard way to keep
 " state across restarts yet, so use with care.
